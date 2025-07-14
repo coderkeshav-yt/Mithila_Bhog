@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mithila Bhog Design System - Premium Traditional Bihari Snacks E-commerce
+All colors MUST be HSL. Brand colors converted from hex values.
+*/
+
+@layer base {
+  :root {
+    /* Brand Colors */
+    --primary: 25 60% 32%;        /* #8B4513 - Rich Brown */
+    --primary-foreground: 39 100% 94%;  /* Soft Creamy Beige for contrast */
+    
+    --secondary: 39 100% 94%;     /* #FFF5E1 - Soft Creamy Beige */
+    --secondary-foreground: 25 60% 32%;  /* Rich Brown for contrast */
+    
+    --accent: 22 73% 56%;         /* #E07B39 - Burnt Orange/Terracotta */
+    --accent-foreground: 39 100% 94%;   /* Light text on accent */
+    
+    --background: 39 100% 98%;    /* Very light cream for main background */
+    --foreground: 0 0% 18%;       /* #2F2F2F - Deep Charcoal */
+
+    /* UI Colors derived from brand palette */
+    --card: 39 100% 96%;          /* Slightly off-white cards */
+    --card-foreground: 0 0% 18%;
+    
+    --popover: 39 100% 96%;
+    --popover-foreground: 0 0% 18%;
+    
+    --muted: 39 50% 92%;          /* Muted cream */
+    --muted-foreground: 25 30% 45%; /* Muted brown */
+    
+    --destructive: 0 84% 60%;     /* Error red */
+    --destructive-foreground: 39 100% 94%;
+    
+    --border: 39 40% 88%;         /* Light cream borders */
+    --input: 39 40% 88%;
+    --ring: 25 60% 32%;           /* Focus ring matches primary */
+    
+    /* Design System Extensions */
+    --radius: 0.75rem;            /* Rounded corners for warm feel */
+    
+    /* Custom Brand Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(25 60% 32%), hsl(25 70% 40%));
+    --gradient-warm: linear-gradient(135deg, hsl(39 100% 94%), hsl(39 80% 88%));
+    --gradient-accent: linear-gradient(135deg, hsl(22 73% 56%), hsl(22 83% 66%));
+    
+    /* Shadows */
+    --shadow-warm: 0 4px 20px hsl(25 60% 32% / 0.1);
+    --shadow-card: 0 4px 20px hsl(25 30% 50% / 0.15);
+    --shadow-card-hover: 0 6px 25px hsl(25 30% 50% / 0.25);
+    --shadow-button: 0 2px 8px hsl(22 73% 56% / 0.2);
+    
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Dark mode with warm, rich tones */
+    --background: 25 40% 8%;      /* Very dark brown */
+    --foreground: 39 100% 94%;    /* Cream text */
+    
+    --card: 25 50% 12%;           /* Dark brown cards */
+    --card-foreground: 39 100% 94%;
+    
+    --popover: 25 50% 12%;
+    --popover-foreground: 39 100% 94%;
+    
+    --primary: 39 100% 94%;       /* Light cream as primary in dark */
+    --primary-foreground: 25 60% 32%;
+    
+    --secondary: 25 40% 15%;      /* Dark secondary */
+    --secondary-foreground: 39 100% 94%;
+    
+    --muted: 25 30% 18%;          /* Muted dark brown */
+    --muted-foreground: 39 60% 70%; /* Muted cream */
+    
+    --accent: 22 73% 56%;         /* Keep accent vibrant */
+    --accent-foreground: 39 100% 94%;
+    
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 39 100% 94%;
+    
+    --border: 25 25% 20%;         /* Dark borders */
+    --input: 25 25% 20%;
+    --ring: 22 73% 56%;           /* Accent ring */
+    
+    /* Dark mode gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(25 40% 8%), hsl(25 50% 12%));
+    --gradient-warm: linear-gradient(135deg, hsl(25 30% 15%), hsl(25 40% 18%));
+    --shadow-warm: 0 4px 20px hsl(0 0% 0% / 0.3);
+    --shadow-card: 0 4px 20px hsl(0 0% 0% / 0.25);
+    --shadow-card-hover: 0 6px 25px hsl(0 0% 0% / 0.35);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-poppins;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+  
+  /* Mithila-inspired decorative patterns */
+  .mithila-border {
+    position: relative;
+  }
+  
+  .mithila-border::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      hsl(var(--accent)) 20%, 
+      hsl(var(--primary)) 50%, 
+      hsl(var(--accent)) 80%, 
+      transparent 100%
+    );
+    opacity: 0.6;
+  }
+  
+  /* Smooth transitions for all interactive elements */
+  button, a, .card {
+    transition: var(--transition-smooth);
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--secondary));
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary));
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--accent));
+  }
+}
