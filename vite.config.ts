@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false, // Disable sourcemaps for production
     assetsDir: 'assets',
     rollupOptions: {
       input: {

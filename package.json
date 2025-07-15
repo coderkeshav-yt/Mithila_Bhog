@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "postbuild": "node vercel-build.cjs",
-    "build:dev": "vite build --mode development",
+    "build:dev": "tsc && vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"
   },
