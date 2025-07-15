@@ -1,0 +1,5 @@
+{
+  "publicDir": "dist",
+  "entryPoint": "index.html",
+  "type": "static"
+} 

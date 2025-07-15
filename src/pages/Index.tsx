@@ -10,8 +10,16 @@ import Footer from "@/components/Footer";
 import { featuredProducts, bestsellerProducts, newArrivals, categories } from "@/data/products";
 import { Star, Clock } from 'lucide-react';
 
+// Check for browser environment to avoid hydration issues
+const isBrowser = typeof window !== 'undefined';
+
 const Index = () => {
   const navigate = useNavigate();
+
+  // If we're in a build/SSR context without browser APIs
+  if (!isBrowser) {
+    return null;
+  }
 
   return (
     <div className="bg-background">
@@ -44,6 +52,10 @@ const Index = () => {
                         src={category.image}
                         alt={category.name}
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/placeholder.svg';
+                        }}
                       />
                     </div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
