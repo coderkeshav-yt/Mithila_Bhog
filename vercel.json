@@ -11,9 +11,9 @@
   ],
   "routes": [
     {
-      "src": "^/index.html$",
+      "src": "^/.*\\.(js|css|png|jpg|svg|ico)$",
       "headers": {
-        "Cache-Control": "no-cache"
+        "Cache-Control": "public, max-age=0, must-revalidate"
       }
     },
     {
