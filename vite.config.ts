@@ -34,9 +34,33 @@ export default defineConfig(({ mode }) => ({
         assetFileNames: `assets/[name].[ext]`
       }
     },
+    minify: mode === 'production',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+      },
+    },
   },
   publicDir: 'public',
   optimizeDeps: {
-    include: ['@tanstack/react-query', '@radix-ui/react-slot', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-toast']
-  }
+    include: [
+      '@tanstack/react-query',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-toast',
+      'react-router-dom',
+      '@headlessui/react',
+      'class-variance-authority',
+      'tailwind-merge',
+      'clsx'
+    ]
+  },
+  css: {
+    preprocessorOptions: {
+      less: {
+        javascriptEnabled: true,
+      },
+    },
+  },
 }));
