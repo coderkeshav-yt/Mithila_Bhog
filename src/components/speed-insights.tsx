@@ -7,7 +7,7 @@ const SpeedInsights = () => {
     script.async = true;
     document.body.appendChild(script);
 
-    window.vercelId = 'YOUR_VERCEL_PROJECT_ID';
+    window.vercelId = 'prj_YXm3MnReMsF5djo6CQCXyFD9bFRd';
 
     return () => {
       document.body.removeChild(script);
