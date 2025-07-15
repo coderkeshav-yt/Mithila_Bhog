@@ -151,7 +151,7 @@ const Footer = () => {
         {/* Bottom Section */}
         <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
           <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-6 text-sm text-muted-foreground">
-            <p>&copy; 2024 Mithila Bhog. All rights reserved.</p>
+            <p>&copy; 2025 Mithila Bhog. All rights reserved.</p>
             <div className="flex space-x-4">
               <Link
                 to="/privacy"
