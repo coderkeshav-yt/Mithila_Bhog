@@ -29,6 +29,7 @@ export default defineConfig(({ mode }) => ({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: true,
+    assetsDir: 'assets',
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
@@ -36,7 +37,7 @@ export default defineConfig(({ mode }) => ({
       output: {
         entryFileNames: `[name].${mode === 'production' ? 'js' : 'ts'}`,
         chunkFileNames: `[name].${mode === 'production' ? 'js' : 'ts'}`,
-        assetFileNames: `[name].[ext]`
+        assetFileNames: `assets/[name].[ext]`
       }
     },
     minify: mode === 'production',
