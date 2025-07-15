@@ -35,15 +35,15 @@ export default defineConfig(({ mode }) => ({
         main: path.resolve(__dirname, 'index.html'),
       },
       output: {
-        entryFileNames: `[name].${mode === 'production' ? 'js' : 'ts'}`,
-        chunkFileNames: `[name].${mode === 'production' ? 'js' : 'ts'}`,
-        assetFileNames: `assets/[name].[ext]`
+        entryFileNames: `assets/[name].[hash].js`,
+        chunkFileNames: `assets/[name].[hash].js`,
+        assetFileNames: `assets/[name].[hash].[ext]`
       }
     },
     minify: mode === 'production',
     terserOptions: {
       compress: {
-        drop_console: true,
+        drop_console: mode === 'production',
       },
     },
   },

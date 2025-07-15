@@ -11,28 +11,36 @@
   ],
   "routes": [
     {
-      "src": "^/(favicon\.ico|manifest\.json|robots\.txt|sitemap\.xml)$",
+      "src": "^/assets/(.*)",
       "headers": {
-        "Cache-Control": "public, max-age=0, must-revalidate"
-      }
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
     },
     {
-      "src": "^/assets/.*$",
+      "src": "^/(favicon\\.ico|robots\\.txt|site\\.webmanifest|.*\\.png|.*\\.jpg|.*\\.svg)$",
       "headers": {
-        "Cache-Control": "public, max-age=31536000"
-      }
+        "Cache-Control": "public, max-age=3600, must-revalidate"
+      },
+      "continue": true
     },
     {
-      "src": "^/.*\\.(js|css)$",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000"
-      }
+      "src": "^/icons/(.*)",
+      "dest": "/icons/$1",
+      "continue": true
     },
     {
-      "src": "^/.*$",
+      "src": "^/(.*\\.(js|css))$",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "/(.*)",
       "dest": "/index.html",
       "headers": {
-        "Cache-Control": "no-cache"
+        "Cache-Control": "public, max-age=0, must-revalidate"
       }
     }
   ]

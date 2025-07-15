@@ -162,6 +162,21 @@ const ProductDetail = () => {
           return;
         }
         
+        if (!data) {
+          setError("Product not found");
+          return;
+        }
+        
+        // Ensure product has at least an empty array for images if not provided
+        if (!data.images) {
+          data.images = [];
+        }
+        
+        // Add a fallback image if none provided
+        if (!data.image_url && (!data.images || data.images.length === 0)) {
+          data.image_url = "/placeholder.svg";
+        }
+        
         setProduct(data);
       } catch (error) {
         console.error('Error fetching product:', error);
@@ -249,11 +264,15 @@ const ProductDetail = () => {
   // Get all product images, fallback to single image_url if images array doesn't exist
   const productImages = useMemo(() => {
     if (!product) return [];
-    return product.images && product.images.length > 0 
-      ? product.images 
-      : product.image_url 
-        ? [{ url: product.image_url, is_primary: true }] 
-        : [];
+    // Make sure we always have at least one image
+    if (product.images && product.images.length > 0) {
+      return product.images;
+    } else if (product.image_url) {
+      return [{ url: product.image_url, is_primary: true }];
+    } else {
+      // Fallback image if no images are available
+      return [{ url: "/placeholder.svg", is_primary: true }];
+    }
   }, [product]);
 
   // Handle keyboard navigation
@@ -396,7 +415,7 @@ const ProductDetail = () => {
                 <>
                   <img
                     ref={imageRef}
-                    src={productImages[currentImageIndex].url}
+                    src={productImages[currentImageIndex]?.url || "/placeholder.svg"}
                     alt={`${product.name} - Image ${currentImageIndex + 1}`}
                     className={cn(
                       "w-full h-full object-contain transition-transform duration-300",
@@ -407,8 +426,10 @@ const ProductDetail = () => {
                       transformOrigin: 'center center',
                     }}
                     onError={(e) => {
+                      console.log("Image failed to load, using fallback");
                       e.currentTarget.src = "/placeholder.svg";
                     }}
+                    loading="eager"
                   />
                   
                   {/* Navigation Arrows */}
@@ -498,12 +519,14 @@ const ProductDetail = () => {
                       aria-label={`View image ${index + 1}`}
                     >
                       <img
-                        src={img.url}
+                        src={img?.url || "/placeholder.svg"}
                         alt=""
                         className="w-full h-full object-cover"
                         onError={(e) => {
+                          console.log("Thumbnail failed to load, using fallback");
                           e.currentTarget.src = "/placeholder.svg";
                         }}
+                        loading="eager"
                       />
                       {img.is_primary && (
                         <div className="absolute top-1 left-1 bg-primary text-primary-foreground text-[10px] px-1 rounded">
@@ -534,12 +557,14 @@ const ProductDetail = () => {
                   {productImages.length > 0 && (
                     <>
                       <img
-                        src={productImages[currentImageIndex].url}
+                        src={productImages[currentImageIndex]?.url || "/placeholder.svg"}
                         alt={`${product.name} - Image ${currentImageIndex + 1}`}
                         className="w-full h-full object-contain"
                         onError={(e) => {
+                          console.log("Fullscreen image failed to load, using fallback");
                           e.currentTarget.src = "/placeholder.svg";
                         }}
+                        loading="eager"
                       />
                       
                       {/* Navigation Arrows */}
@@ -762,13 +787,16 @@ const ProductDetail = () => {
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.onerror = null;
-                    target.src = '';
-                    target.style.display = 'none';
+                    // Create a fallback emoji
                     const fallback = document.createElement('div');
                     fallback.className = 'h-12 w-12 flex items-center justify-center text-green-500 text-xl';
                     fallback.textContent = '🚚';
-                    target.parentNode?.insertBefore(fallback, target);
+                    if (target.parentNode) {
+                      target.parentNode.insertBefore(fallback, target);
+                      target.style.display = 'none';
+                    }
                   }}
+                  loading="eager"
                 />
               </div>
               <h3 className="font-semibold text-foreground text-sm md:text-base mb-1">Free Shipping</h3>
@@ -788,13 +816,16 @@ const ProductDetail = () => {
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.onerror = null;
-                    target.src = '';
-                    target.style.display = 'none';
+                    // Create a fallback emoji
                     const fallback = document.createElement('div');
                     fallback.className = 'h-12 w-12 flex items-center justify-center text-blue-500 text-xl';
                     fallback.textContent = '✓';
-                    target.parentNode?.insertBefore(fallback, target);
+                    if (target.parentNode) {
+                      target.parentNode.insertBefore(fallback, target);
+                      target.style.display = 'none';
+                    }
                   }}
+                  loading="eager"
                 />
               </div>
               <h3 className="font-semibold text-foreground text-sm md:text-base mb-1">Quality</h3>
@@ -814,13 +845,16 @@ const ProductDetail = () => {
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
                     target.onerror = null;
-                    target.src = '';
-                    target.style.display = 'none';
+                    // Create a fallback emoji
                     const fallback = document.createElement('div');
                     fallback.className = 'h-12 w-12 flex items-center justify-center text-purple-500 text-xl';
                     fallback.textContent = '↻';
-                    target.parentNode?.insertBefore(fallback, target);
+                    if (target.parentNode) {
+                      target.parentNode.insertBefore(fallback, target);
+                      target.style.display = 'none';
+                    }
                   }}
+                  loading="eager"
                 />
               </div>
               <h3 className="font-semibold text-foreground text-sm md:text-base mb-1">Easy Returns</h3>
