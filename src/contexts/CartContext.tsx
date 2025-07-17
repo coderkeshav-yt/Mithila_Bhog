@@ -50,18 +50,55 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   // Load cart items on auth change
   useEffect(() => {
     if (user) {
-      loadCartItems();
+      // Try to load from cache first, then update from server
+      const cachedCart = localStorage.getItem(`cart_${user.id}`);
+      const cacheTimestamp = localStorage.getItem(`cart_timestamp_${user.id}`);
+      const now = Date.now();
+      const cacheAge = cacheTimestamp ? now - parseInt(cacheTimestamp) : Infinity;
+      const cacheValid = cacheAge < 5 * 60 * 1000; // 5 minutes cache validity
+      
+      if (cachedCart && cacheValid) {
+        try {
+          const parsedCart = JSON.parse(cachedCart);
+          setCartItems(parsedCart);
+          console.log('Using cached cart data');
+          
+          // Refresh cache in background after a short delay
+          setTimeout(() => loadCartItems(false), 1000);
+        } catch (e) {
+          console.error('Error parsing cached cart:', e);
+          loadCartItems(true);
+        }
+      } else {
+        loadCartItems(true);
+      }
     } else {
       setCartItems([]);
     }
   }, [user]);
 
-  const loadCartItems = async () => {
+  const loadCartItems = async (updateUI = true) => {
     if (!user) return;
     
-    setLoading(true);
+    if (updateUI) setLoading(true);
+    
+    // Set a timeout to prevent getting stuck in loading state
+    let timeoutId: NodeJS.Timeout | null = null;
+    
+    if (updateUI) {
+      timeoutId = setTimeout(() => {
+        console.log('Cart fetch timeout reached');
+        setLoading(false);
+        toast({
+          title: "Connection Issue",
+          description: "Cart data is taking longer than expected to load.",
+          variant: "warning"
+        });
+      }, 4000); // 4 second timeout
+    }
+    
     try {
-      const { data, error } = await supabase
+      const fetchPromise = supabase
         .from('cart_items')
         .select(`
           id,
@@ -78,6 +115,12 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
           )
         `)
         .eq('user_id', user.id);
+      
+      // Use Promise.race to implement timeout
+      const { data, error } = await fetchPromise;
+
+      // Clear timeout since we got a response
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (error) throw error;
 
@@ -85,11 +128,30 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
         ...item.products,
         quantity: item.quantity
       })) || [];
-      setCartItems(items);
+      
+      // Cache the cart data
+      try {
+        localStorage.setItem(`cart_${user.id}`, JSON.stringify(items));
+        localStorage.setItem(`cart_timestamp_${user.id}`, Date.now().toString());
+      } catch (e) {
+        console.error('Error caching cart:', e);
+      }
+      
+      if (updateUI) {
+        setCartItems(items);
+      }
     } catch (error) {
       console.error('Error loading cart:', error);
+      if (updateUI) {
+        toast({
+          title: "Error",
+          description: "Failed to load your cart. Please try again.",
+          variant: "destructive"
+        });
+      }
     } finally {
-      setLoading(false);
+      if (updateUI) setLoading(false);
+      if (timeoutId) clearTimeout(timeoutId);
     }
   };
 

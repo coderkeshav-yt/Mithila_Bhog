@@ -8,10 +8,74 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Create a custom storage object to handle browser/non-browser environments
+const customStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return localStorage.getItem(key);
+      }
+      return null;
+    } catch (error) {
+      console.error('Error accessing localStorage:', error);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(key, value);
+      }
+    } catch (error) {
+      console.error('Error setting localStorage item:', error);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.error('Error removing localStorage item:', error);
+    }
+  }
+};
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: customStorage,
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+  global: {
+    fetch: (...args) => fetch(...args),
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    timeout: 10000, // Increase timeout for realtime connections
+  },
+  // Add request timeouts to prevent hanging requests
+  queries: {
+    headers: {
+      'Cache-Control': 'no-cache',
+    },
+    throwOnError: false, // Don't throw on error, handle gracefully
   }
 });
+
+// Add a helper function to check connection status
+export const checkSupabaseConnection = async (): Promise<boolean> => {
+  try {
+    const start = performance.now();
+    const { data, error } = await supabase.from('products').select('id').limit(1).maybeSingle();
+    const end = performance.now();
+    console.log(`Supabase connection check took ${end - start}ms`);
+    return !error;
+  } catch (e) {
+    console.error('Supabase connection check failed:', e);
+    return false;
+  }
+};

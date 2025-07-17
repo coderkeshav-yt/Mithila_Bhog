@@ -12,6 +12,7 @@ import ProductSkeleton from "@/components/ProductSkeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, Filter, SlidersHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { products as localProducts } from "@/data/products"; // Import local fallback data
 
 interface Product {
   id: string;
@@ -34,46 +35,143 @@ const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || 'all');
   const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'name');
   const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
 
-  // Fetch products only once on mount
+  // Fetch products with improved performance and caching
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        console.log('Fetching products...');
+        setError(null);
+        console.log('Fetching products from Supabase...');
         
-        const { data, error } = await supabase
+        // Check for cached products first
+        const cachedProducts = localStorage.getItem('cachedProducts');
+        const cacheTimestamp = localStorage.getItem('productsCacheTimestamp');
+        const now = Date.now();
+        const cacheAge = cacheTimestamp ? now - parseInt(cacheTimestamp) : Infinity;
+        const cacheValid = cacheAge < 15 * 60 * 1000; // 15 minutes cache validity for better performance
+        
+        // Use cache if valid and available
+        if (cachedProducts && cacheValid) {
+          try {
+            const parsedProducts = JSON.parse(cachedProducts);
+            console.log('Using cached products data:', parsedProducts.length);
+            setProducts(parsedProducts);
+            setLoading(false);
+            
+            // Refresh cache in background
+            fetchFromSupabase(false);
+            return;
+          } catch (e) {
+            console.error('Error parsing cached products:', e);
+            // Continue with normal fetch if cache parsing fails
+          }
+        }
+        
+        // Set a shorter timeout to prevent getting stuck in loading state
+        const timeoutId = setTimeout(() => {
+          console.log('Products fetch timeout reached, falling back to local data');
+          setProducts(localProducts as Product[]);
+          setLoading(false);
+          toast({
+            title: "Connection Timeout",
+            description: "Using local product data due to slow connection.",
+            variant: "default"
+          });
+        }, 4000); // Reduced from 8s to 4s timeout
+        
+        await fetchFromSupabase(true, timeoutId);
+      } catch (error) {
+        console.error('Error in fetchProducts:', error);
+        setError("An unexpected error occurred while loading products");
+        toast({
+          title: "Error",
+          description: "Failed to load products. Using local data instead.",
+          variant: "destructive"
+        });
+        // Fall back to local data on any error
+        setProducts(localProducts as Product[]);
+        setLoading(false);
+      }
+    };
+    
+    // Separate function to fetch from Supabase
+    const fetchFromSupabase = async (updateUI = true, timeoutId?: NodeJS.Timeout) => {
+      try {
+        // Use a Promise.race to implement a timeout
+        const fetchPromise = supabase
           .from('products')
           .select('*')
           .eq('is_active', true)
           .order('created_at', { ascending: false });
+          
+        const { data, error } = await fetchPromise;
+
+        // Clear the timeout if it exists
+        if (timeoutId) clearTimeout(timeoutId);
 
         if (error) {
-          console.error('Error fetching products:', error);
-          toast({
-            title: "Error",
-            description: "Failed to load products. Please try again.",
-            variant: "destructive"
-          });
+          console.error('Error fetching products from Supabase:', error);
+          if (updateUI) {
+            setError("Failed to load products from database");
+            toast({
+              title: "Warning",
+              description: "Using local product data instead of database.",
+              variant: "default"
+            });
+            // Fall back to local data
+            console.log('Falling back to local product data');
+            setProducts(localProducts as Product[]);
+          }
           return;
         }
 
-        console.log('Successfully fetched products:', data?.length || 0);
-        setProducts(data || []);
+        if (!data || data.length === 0) {
+          console.log('No products found in Supabase, falling back to local data');
+          if (updateUI) {
+            toast({
+              title: "Info",
+              description: "Using demo products as no products were found in the database.",
+              variant: "default"
+            });
+            setProducts(localProducts as Product[]);
+          }
+          return;
+        }
+
+        console.log('Successfully fetched products from Supabase:', data.length);
+        
+        // Cache the products data
+        try {
+          localStorage.setItem('cachedProducts', JSON.stringify(data));
+          localStorage.setItem('productsCacheTimestamp', Date.now().toString());
+        } catch (e) {
+          console.error('Error caching products:', e);
+        }
+        
+        if (updateUI) {
+          setProducts(data);
+          setLoading(false);
+        }
       } catch (error) {
-        console.error('Error fetching products:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load products. Please try again.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
+        console.error('Error in fetchFromSupabase:', error);
+        if (updateUI) {
+          setError("An unexpected error occurred while loading products");
+          toast({
+            title: "Error",
+            description: "Failed to load products. Using local data instead.",
+            variant: "destructive"
+          });
+          // Fall back to local data on any error
+          setProducts(localProducts as Product[]);
+          setLoading(false);
+        }
       }
     };
 
@@ -86,32 +184,35 @@ const Products = () => {
     return ['all', ...new Set(products.map(p => p.category))];
   }, [products]);
 
-  // Filter and sort products
+  // Filter and sort products with optimized performance
   const filteredProducts = useMemo(() => {
+    // Early return if no products
     if (!products.length) return [];
     
-    let filtered = [...products];
-
-    // Apply search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(search) ||
-        product.description?.toLowerCase().includes(search) ||
-        product.category.toLowerCase().includes(search) ||
-        product.ingredients?.some(ingredient => 
-          ingredient.toLowerCase().includes(search)
-        )
-      );
-    }
-
-    // Apply category filter
-    if (selectedCategory && selectedCategory !== 'all') {
-      filtered = filtered.filter(product => product.category === selectedCategory);
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
+    // Prepare search term once for all products
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    const hasSearchTerm = !!searchTerm;
+    const isAllCategories = selectedCategory === 'all';
+    
+    // First filter by category (faster check)
+    const categoryFiltered = isAllCategories 
+      ? products 
+      : products.filter(product => product.category === selectedCategory);
+    
+    // Then filter by search term if needed
+    const fullyFiltered = !hasSearchTerm 
+      ? categoryFiltered 
+      : categoryFiltered.filter(product => {
+          return product.name.toLowerCase().includes(lowerSearchTerm) || 
+                 product.description?.toLowerCase().includes(lowerSearchTerm) ||
+                 product.category.toLowerCase().includes(lowerSearchTerm) ||
+                 product.ingredients?.some(ingredient => 
+                   ingredient.toLowerCase().includes(lowerSearchTerm)
+                 );
+        });
+    
+    // Sort the filtered results
+    return fullyFiltered.sort((a, b) => {
       switch (sortBy) {
         case 'price-low':
           return a.price - b.price;
@@ -126,8 +227,6 @@ const Products = () => {
           return a.name.localeCompare(b.name);
       }
     });
-
-    return filtered;
   }, [products, searchTerm, selectedCategory, sortBy]);
 
   // Update URL params when filters change (separate effect)
@@ -146,6 +245,15 @@ const Products = () => {
     setSearchParams({});
   };
 
+  const retryFetch = () => {
+    setLoading(true);
+    setError(null);
+    // Re-mount effect to trigger a new fetch
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -162,16 +270,18 @@ const Products = () => {
         {/* Search and Filters */}
         <div className="mb-8">
           <div className="flex flex-col lg:flex-row gap-4 items-center justify-between mb-6">
-            {/* Search Bar */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                type="text"
-                placeholder="Search products..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+            {/* Search Bar - Mobile Only */}
+            <div className="w-full lg:hidden">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full"
+                />
+              </div>
             </div>
 
             {/* Filter Toggle (Mobile) */}
@@ -243,108 +353,53 @@ const Products = () => {
                 </button>
               </Badge>
             )}
-          </div>
-        </div>
-
-        {/* Results Count */}
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-muted-foreground">
-            {loading ? (
-              "Loading products..."
-            ) : (
-              `Showing ${filteredProducts.length} of ${products.length} products`
+            {sortBy && sortBy !== 'name' && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                Sort: {sortBy.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                <button
+                  onClick={() => setSortBy('name')}
+                  className="ml-1 hover:text-destructive"
+                >
+                  ×
+                </button>
+              </Badge>
             )}
-          </p>
+          </div>
         </div>
 
-        {/* Products Grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, index) => (
-              <ProductSkeleton key={index} />
-            ))}
-          </div>
-        ) : filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map((product) => (
-              <ProductCard 
-                key={product.id}
-                id={product.id}
-                name={product.name}
-                image_url={product.image_url}
-                price={product.price}
-                rating={product.rating}
-                category={product.category}
-                description={product.description}
-                weight={product.weight}
-                is_bestseller={product.is_bestseller}
-                is_new={product.is_new}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <div className="max-w-md mx-auto">
-              <Filter className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-2">
-                No products found
-              </h3>
-              <p className="text-muted-foreground mb-6">
-                {searchTerm || selectedCategory !== 'all'
-                  ? "Try adjusting your search or filters to find what you're looking for."
-                  : "We're working on adding more products. Check back soon!"
-                }
-              </p>
-              {(searchTerm || selectedCategory !== 'all') && (
-                <Button onClick={clearFilters} variant="outline">
-                  Clear all filters
-                </Button>
-              )}
-            </div>
+        {/* Error Message */}
+        {error && (
+          <div className="text-center my-8 p-4 bg-destructive/10 rounded-lg">
+            <p className="text-destructive mb-2">{error}</p>
+            <Button variant="outline" onClick={retryFetch}>
+              Retry
+            </Button>
           </div>
         )}
 
-        {/* Category Showcase */}
-        {!loading && products.length > 0 && (
-          <div className="mt-16">
-            <h2 className="text-2xl font-bold text-foreground text-center mb-8">
-              Shop by Category
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {categories.slice(1).map((category) => {
-                const categoryProducts = products.filter(p => p.category === category);
-                const firstProduct = categoryProducts[0];
-                
-                if (!firstProduct) return null;
-                
-                return (
-                  <button
-                    key={category}
-                    onClick={() => setSelectedCategory(category)}
-                    className="group text-left"
-                  >
-                    <div className="aspect-square rounded-lg overflow-hidden mb-3 bg-secondary/30">
-                      <img
-                        src={firstProduct.image_url || "/placeholder.svg"}
-                        alt={category}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => {
-                          e.currentTarget.src = "/placeholder.svg";
-                        }}
-                      />
-                    </div>
-                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {categoryProducts.length} products
-                    </p>
-                  </button>
-                );
-              })}
+        {/* Product Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {loading ? (
+            // Loading Skeletons
+            Array.from({ length: 8 }).map((_, i) => (
+              <ProductSkeleton key={i} />
+            ))
+          ) : filteredProducts.length > 0 ? (
+            // Product Cards
+            filteredProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))
+          ) : (
+            // No Products Found
+            <div className="col-span-full text-center py-12">
+              <h3 className="text-xl font-medium mb-2">No products found</h3>
+              <p className="text-muted-foreground mb-4">
+                Try adjusting your search or filter criteria
+              </p>
+              <Button onClick={clearFilters}>Clear All Filters</Button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
       <Footer />
     </div>

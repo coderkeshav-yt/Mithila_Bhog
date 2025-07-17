@@ -38,7 +38,7 @@ interface OrderHistoryProps {
 }
 
 const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
-  const { refreshRevenue } = useRevenueContext();
+  const { forceRefresh } = useRevenueContext();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,11 +100,23 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
 
       if (getOrderError) throw getOrderError;
 
+      // Determine the appropriate payment status based on the new order status
+      let newPaymentStatus = order.payment_status;
+      
+      if (newStatus === 'completed') {
+        newPaymentStatus = 'completed'; // Use 'completed' instead of 'paid' for consistency
+      } else if (newStatus === 'cancelled') {
+        newPaymentStatus = 'cancelled';
+      } else if (newStatus === 'pending' || newStatus === 'processing') {
+        newPaymentStatus = 'pending';
+      }
+
       const { data: updatedOrder, error: updateError } = await supabase
         .from('orders')
         .update({ 
           status: newStatus,
-          payment_status: newStatus === 'completed' ? 'paid' : order.payment_status
+          payment_status: newPaymentStatus,
+          updated_at: new Date().toISOString() // Add updated timestamp
         })
         .eq('id', orderId)
         .select('*')
@@ -112,8 +124,13 @@ const OrderHistory: React.FC<OrderHistoryProps> = ({ user }) => {
 
       if (updateError) throw updateError;
 
-      refreshRevenue();
+      // Use forceRefresh to ensure all components update
+      forceRefresh();
+      
+      // Show success message
       toast.success(`Order status updated to ${newStatus}`);
+      
+      // Refetch orders to update the UI
       fetchOrders();
     } catch (error) {
       console.error('Error updating order status:', error);

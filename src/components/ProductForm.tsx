@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { X, Image as ImageIcon, Trash2, Star, Upload } from "lucide-react";
+import { X, Image as ImageIcon, Trash2, Star, Upload, Plus, Check } from "lucide-react";
 
 interface ProductImage {
   id?: string;
@@ -41,7 +41,7 @@ interface ProductFormProps {
   onSuccess: () => void;
 }
 
-const categories = [
+const defaultCategories = [
   "Traditional Sweets",
   "Pickles & Preserves", 
   "Chips & Snacks",
@@ -70,6 +70,8 @@ const ProductForm = ({ product, onClose, onSuccess }: ProductFormProps) => {
   const [ingredientInput, setIngredientInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [imageUrlInput, setImageUrlInput] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [categories, setCategories] = useState<string[]>(defaultCategories);
 
   const addIngredient = () => {
     if (ingredientInput.trim() && !formData.ingredients.includes(ingredientInput.trim())) {
@@ -151,6 +153,34 @@ const ProductForm = ({ product, onClose, onSuccess }: ProductFormProps) => {
       image_url: formData.image_url === removedImage.url 
         ? newImages[0]?.url || "" 
         : formData.image_url
+    });
+  };
+
+  const addNewCategory = () => {
+    if (newCategory.trim() && !categories.includes(newCategory.trim())) {
+      setCategories([...categories, newCategory.trim()]);
+      setNewCategory("");
+      toast({
+        title: "Success",
+        description: "Category added successfully.",
+      });
+    } else if (categories.includes(newCategory.trim())) {
+      toast({
+        title: "Warning",
+        description: "This category already exists.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const deleteCategory = (categoryToDelete: string) => {
+    if (formData.category === categoryToDelete) {
+      setFormData({ ...formData, category: "" });
+    }
+    setCategories(categories.filter(cat => cat !== categoryToDelete));
+    toast({
+      title: "Success",
+      description: "Category deleted successfully.",
     });
   };
 
@@ -293,20 +323,117 @@ const ProductForm = ({ product, onClose, onSuccess }: ProductFormProps) => {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="category">Category *</Label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-4 p-4 rounded-lg border bg-card">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Categories</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {categories.length} {categories.length === 1 ? 'category' : 'categories'}
+                    </span>
+                  </div>
+                  
+                  {/* Add New Category */}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        type="text"
+                        placeholder="Enter new category name"
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNewCategory())}
+                        className="pr-16"
+                      />
+                      {newCategory && (
+                        <button
+                          type="button"
+                          onClick={() => setNewCategory('')}
+                          className="absolute right-10 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <Button 
+                      type="button" 
+                      onClick={addNewCategory}
+                      variant="outline"
+                      className="shrink-0"
+                      disabled={!newCategory.trim()}
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Add
+                    </Button>
+                  </div>
+                  
+                  {/* Categories List */}
+                  {categories.length > 0 ? (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium text-muted-foreground">
+                        Click to select, or delete to remove
+                      </Label>
+                      <div className="flex flex-wrap gap-2">
+                        {categories.map((category) => (
+                          <div 
+                            key={category} 
+                            className={`relative group rounded-md overflow-hidden transition-all ${formData.category === category ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                          >
+                            <div
+                              onClick={() => setFormData({ ...formData, category })}
+                              className={`px-3 py-1.5 text-sm font-medium rounded-md cursor-pointer transition-colors flex items-center gap-1.5 ${
+                                formData.category === category 
+                                  ? 'bg-primary text-primary-foreground' 
+                                  : 'bg-secondary hover:bg-secondary/80'
+                              }`}
+                            >
+                              {formData.category === category && (
+                                <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                              )}
+                              <span className="truncate max-w-[180px]">{category}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteCategory(category);
+                              }}
+                              className="absolute -right-1 -top-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110"
+                              title="Delete category"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed p-4 text-center">
+                      <p className="text-sm text-muted-foreground">
+                        No categories yet. Add one above to get started.
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Category Selector */}
+                <div className="pt-2 border-t">
+                  <Label className="text-sm font-medium mb-2 block">
+                    Or select from existing categories
+                  </Label>
+                  <Select 
+                    value={formData.category} 
+                    onValueChange={(value) => setFormData({ ...formData, category: value })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 

@@ -39,6 +39,11 @@ interface Product {
   weight: string;
   rating: number;
   stock_quantity: number;
+  is_active?: boolean;
+  is_bestseller?: boolean;
+  is_new?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const ProductDetailSkeleton = () => (
@@ -84,7 +89,7 @@ const ProductDetailSkeleton = () => (
 );
 
 const ProductDetail = () => {
-  const { id } = useParams<{ id: string }>();
+  const { productName } = useParams<{ productName: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +104,7 @@ const ProductDetail = () => {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
   const imageRef = useRef<HTMLImageElement>(null);
-  const { addToCart } = useCart();
+  const { addToCart, updateQuantity } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -140,8 +145,8 @@ const ProductDetail = () => {
 
   useEffect(() => {
     const fetchProduct = async () => {
-      if (!id) {
-        setError("Product ID not found");
+      if (!productName) {
+        setError("Product name not found");
         setLoading(false);
         return;
       }
@@ -150,20 +155,92 @@ const ProductDetail = () => {
         setLoading(true);
         setError(null);
         
-        const { data, error } = await supabase
+        // First, try to get the product ID from the location state
+        const location = window.history.state;
+        const productId = location?.state?.productId;
+        
+        // Check for cached product data
+        const cacheKey = productId ? `product_${productId}` : `product_${productName}`;
+        const cachedProduct = localStorage.getItem(cacheKey);
+        const cacheTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
+        const now = Date.now();
+        const cacheAge = cacheTimestamp ? now - parseInt(cacheTimestamp) : Infinity;
+        const cacheValid = cacheAge < 10 * 60 * 1000; // 10 minutes cache validity
+        
+        // Use cache if valid and available
+        if (cachedProduct && cacheValid) {
+          try {
+            const parsedProduct = JSON.parse(cachedProduct);
+            console.log('Using cached product data');
+            setProduct(parsedProduct);
+            setLoading(false);
+            
+            // Refresh cache in background after a short delay
+            setTimeout(() => fetchFromSupabase(false), 1000);
+            return;
+          } catch (e) {
+            console.error('Error parsing cached product:', e);
+            // Continue with normal fetch if cache parsing fails
+          }
+        }
+        
+        // Set a timeout to prevent getting stuck in loading state
+        const timeoutId = setTimeout(() => {
+          console.log('Product fetch timeout reached');
+          setLoading(false);
+          toast({
+            title: "Connection Issue",
+            description: "Product data is taking longer than expected to load.",
+            variant: "warning"
+          });
+        }, 4000); // 4 second timeout
+        
+        await fetchFromSupabase(true, timeoutId);
+      } catch (error) {
+        console.error('Error fetching product:', error);
+        setError("Failed to load product details");
+        setLoading(false);
+      }
+    };
+    
+    // Separate function to fetch from Supabase
+    const fetchFromSupabase = async (updateUI = true, timeoutId?: NodeJS.Timeout) => {
+      try {
+        // First, try to get the product ID from the location state
+        const location = window.history.state;
+        const productId = location?.state?.productId;
+        
+        let query = supabase
           .from('products')
           .select('*')
-          .eq('id', id)
-          .single();
+          .eq('is_active', true);
+        
+        // If we have the product ID from state, use it for more reliable lookup
+        if (productId) {
+          query = query.eq('id', productId);
+        } else {
+          // Otherwise, try to find by name (fallback)
+          const decodedName = decodeURIComponent(productName).replace(/-/g, ' ');
+          query = query.ilike('name', `%${decodedName}%`);
+        }
+        
+        const { data, error } = await query.single();
+
+        // Clear the timeout if it exists
+        if (timeoutId) clearTimeout(timeoutId);
 
         if (error) {
           console.error('Error fetching product:', error);
-          setError("Failed to load product details");
+          if (updateUI) {
+            setError("Failed to load product details");
+          }
           return;
         }
         
         if (!data) {
-          setError("Product not found");
+          if (updateUI) {
+            setError("Product not found");
+          }
           return;
         }
         
@@ -177,34 +254,62 @@ const ProductDetail = () => {
           data.image_url = "/placeholder.svg";
         }
         
-        setProduct(data);
+        // Cache the product data
+        const cacheKey = productId ? `product_${productId}` : `product_${productName}`;
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(data));
+          localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+        } catch (e) {
+          console.error('Error caching product:', e);
+        }
+        
+        if (updateUI) {
+          // Update the URL in the address bar to use the correct product name format
+          const formattedName = data.name.toLowerCase().replace(/\s+/g, '-');
+          if (formattedName !== productName) {
+            window.history.replaceState(
+              { ...location, productId: data.id },
+              '',
+              `/products/${formattedName}`
+            );
+          }
+          
+          setProduct(data);
+          setLoading(false);
+        }
       } catch (error) {
-        console.error('Error fetching product:', error);
-        setError("Failed to load product details");
-      } finally {
-        setLoading(false);
+        console.error('Error in fetchFromSupabase:', error);
+        if (updateUI) {
+          setError("Failed to load product details");
+          setLoading(false);
+        }
+        if (timeoutId) clearTimeout(timeoutId);
       }
     };
 
     fetchProduct();
-  }, [id]);
+  }, [productName]);
 
   const handleAddToCart = async (redirectToCheckout = false) => {
     if (!product) return;
     
     setAddingToCart(true);
     try {
+      // First add the item to cart
       await addToCart({
         id: product.id,
         name: product.name,
         price: product.price,
         image_url: product.image_url,
-        quantity,
-        stock_quantity: product.stock_quantity,
         category: product.category,
         description: product.description,
         weight: product.weight,
       });
+      
+      // Then update the quantity
+      if (quantity > 1) {
+        updateQuantity(product.id, quantity);
+      }
       
       toast({
         title: redirectToCheckout ? "Proceeding to checkout!" : "Added to cart!",
@@ -615,118 +720,119 @@ const ProductDetail = () => {
           </div>
 
           {/* Product Info */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div>
-              <Badge className="mb-3 bg-accent text-accent-foreground">
-                {product.category}
-              </Badge>
-              <h1 className="text-3xl font-bold text-foreground mb-4">
-                {product.name}
-              </h1>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="flex items-center">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`h-5 w-5 ${
-                          i < Math.floor(product.rating || 0)
-                            ? "fill-yellow-400 text-yellow-400"
-                            : "text-gray-300"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    ({product.rating?.toFixed(1)})
-                  </span>
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <Badge className="mb-2 bg-accent text-accent-foreground">
+                    {product.category}
+                  </Badge>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
+                    {product.name}
+                  </h1>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleShare}
-                  disabled={isSharing}
-                  className="flex items-center gap-2 text-foreground hover:bg-accent/10 transition-colors"
-                  aria-label="Share product"
-                >
-                  <Share2 className="h-4 w-4" />
-                  <span>Share</span>
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShare}
+                    disabled={isSharing}
+                    className="flex items-center gap-1.5 text-foreground hover:text-foreground hover:bg-accent/10 active:bg-accent/20 transition-colors min-w-[80px] h-9"
+                    aria-label="Share product"
+                  >
+                    <Share2 className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="hidden sm:inline-block text-sm font-medium">Share</span>
+                  </Button>
+                  <Button
+                    variant={isInWishlist(product.id) ? "default" : "outline"}
+                    size="sm"
+                    className={`flex items-center gap-1.5 ${
+                      isInWishlist(product.id)
+                        ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                        : 'text-foreground hover:text-foreground hover:bg-accent/10 active:bg-accent/20'
+                    } transition-colors min-w-[80px] h-9`}
+                    onClick={handleWishlistToggle}
+                    aria-label={isInWishlist(product.id) ? "Remove from wishlist" : "Add to wishlist"}
+                  >
+                    <Heart className={`h-3.5 w-3.5 flex-shrink-0 ${isInWishlist(product.id) ? 'fill-current' : ''}`} />
+                    <span className="hidden sm:inline-block text-sm font-medium">Wishlist</span>
+                  </Button>
+                </div>
               </div>
-              <p className="text-3xl font-bold text-primary mb-4">
+              
+              <div className="flex items-center space-x-2 mb-3">
+                <div className="flex items-center">
+                  {[...Array(5)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`h-4 w-4 ${
+                        i < Math.floor(product.rating || 0)
+                          ? "fill-yellow-400 text-yellow-400"
+                          : "text-gray-300"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  ({product.rating?.toFixed(1)})
+                </span>
+              </div>
+              
+              <p className="text-2xl font-bold text-primary mb-3">
                 ₹{product.price.toFixed(2)}
               </p>
-              <p className="text-muted-foreground leading-relaxed">
-                {product.description}
-              </p>
-            </div>
-
-            <Separator />
-
-            {/* Product Details */}
-            <div className="space-y-4">
-              {product.weight && (
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Weight</h3>
-                  <p className="text-muted-foreground">{product.weight}</p>
-                </div>
-              )}
               
-              {product.ingredients && product.ingredients.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Ingredients</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {product.ingredients.map((ingredient, index) => (
-                      <Badge key={index} variant="outline">
-                        {ingredient}
-                      </Badge>
-                    ))}
+              {/* Product Details - Moved Up */}
+              <div className="space-y-4 mb-4">
+                {product.weight && (
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-1">Weight</h3>
+                    <p className="text-sm text-muted-foreground">{product.weight}</p>
+                  </div>
+                )}
+                
+                {product.ingredients && product.ingredients.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-1">Ingredients</h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {product.ingredients.map((ingredient, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {ingredient}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Add to Cart Section */}
+              <div className="bg-muted/30 p-4 rounded-lg mb-4">
+                <div className="flex items-center gap-4 mb-3">
+                  <label className="font-medium text-foreground">Quantity:</label>
+                  <div className="flex items-center border rounded-lg">
+                    <button
+                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="px-3 py-1.5 hover:bg-secondary transition-colors"
+                      disabled={addingToCart}
+                    >
+                      -
+                    </button>
+                    <span className="px-4 py-1.5 border-x">{quantity}</span>
+                    <button
+                      onClick={() => setQuantity(quantity + 1)}
+                      className="px-3 py-1.5 hover:bg-secondary transition-colors"
+                      disabled={addingToCart}
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
-              )}
 
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Stock</h3>
-                <p className="text-muted-foreground">
-                  {(product.stock_quantity || 0) > 0 
-                    ? `${product.stock_quantity} units available`
-                    : "Out of stock"
-                  }
-                </p>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Add to Cart Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <label className="font-semibold text-foreground">Quantity:</label>
-                <div className="flex items-center border rounded-lg">
-                  <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="px-3 py-2 hover:bg-secondary transition-colors"
-                    disabled={addingToCart}
-                  >
-                    -
-                  </button>
-                  <span className="px-4 py-2 border-x">{quantity}</span>
-                  <button
-                    onClick={() => setQuantity(quantity + 1)}
-                    className="px-3 py-2 hover:bg-secondary transition-colors"
-                    disabled={addingToCart}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Button
                     variant="outline"
                     size="lg"
-                    className="h-11 sm:h-12 text-sm font-medium border-2 border-primary/20 text-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
+                    className="h-12 text-sm font-medium border-2 border-primary/20 text-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200"
                     onClick={() => handleAddToCart(false)}
                     disabled={(product.stock_quantity || 0) === 0 || addingToCart}
                   >
@@ -745,7 +851,7 @@ const ProductDetail = () => {
                   <Button
                     variant="default"
                     size="lg"
-                    className="h-11 sm:h-12 text-sm font-medium bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 shadow-md hover:shadow-lg transition-all duration-200"
+                    className="h-12 text-sm font-medium bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 shadow-md hover:shadow-lg transition-all duration-200"
                     onClick={handleBuyNow}
                     disabled={(product.stock_quantity || 0) === 0 || addingToCart}
                   >
@@ -762,21 +868,40 @@ const ProductDetail = () => {
                     )}
                   </Button>
                 </div>
-                <Button
-                  variant={isInWishlist(product.id) ? "default" : "outline"}
-                  size="lg"
-                  className="w-full sm:w-auto h-11 sm:h-12 border-2 hover:border-primary/40 transition-colors"
-                  onClick={handleWishlistToggle}
-                >
-                  <Heart className={`h-4 w-4 ${isInWishlist(product.id) ? 'fill-current' : ''}`} />
-                </Button>
+              </div>
+              
+              <p className="text-sm text-muted-foreground mb-4">
+                {product.description}
+              </p>
+              
+              {/* Stock Status - Moved below description */}
+              <div className="mb-4">
+                <p className="text-sm font-medium">
+                  Status: {" "}
+                  <span className={cn(
+                    "font-semibold",
+                    (product.stock_quantity || 0) > 0 ? "text-green-600" : "text-red-600"
+                  )}>
+                    {(product.stock_quantity || 0) > 0 
+                      ? `In Stock (${product.stock_quantity} units available)`
+                      : "Out of stock"
+                    }
+                  </span>
+                </p>
               </div>
             </div>
+
+            <Separator />
+
+            {/* Product Details - Moved Down */}
+
+            
+
           </div>
         </div>
-
+        
         {/* Features */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
           <Card className="border-0 shadow-sm hover:shadow transition-shadow text-center p-4 h-full">
             <CardContent className="p-0">
               <div className="flex justify-center mb-2">
@@ -860,6 +985,35 @@ const ProductDetail = () => {
               <h3 className="font-semibold text-foreground text-sm md:text-base mb-1">Easy Returns</h3>
               <p className="text-xs text-muted-foreground">
                 7-day return policy
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm hover:shadow transition-shadow text-center p-4 h-full">
+            <CardContent className="p-0">
+              <div className="flex justify-center mb-2">
+                <img 
+                  src="/icons/fresh.png" 
+                  alt="Fresh & Hygienic" 
+                  className="h-12 w-12 object-contain"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    // Create a fallback emoji
+                    const fallback = document.createElement('div');
+                    fallback.className = 'h-12 w-12 flex items-center justify-center text-green-600 text-xl';
+                    fallback.textContent = '🌿';
+                    if (target.parentNode) {
+                      target.parentNode.insertBefore(fallback, target);
+                      target.style.display = 'none';
+                    }
+                  }}
+                  loading="eager"
+                />
+              </div>
+              <h3 className="font-semibold text-foreground text-sm md:text-base mb-1">Fresh & Hygienic</h3>
+              <p className="text-xs text-muted-foreground">
+                Made with premium ingredients
               </p>
             </CardContent>
           </Card>

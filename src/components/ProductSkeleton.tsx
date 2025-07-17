@@ -1,8 +1,10 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import { memo } from "react";
 
-const ProductSkeleton = () => {
+// Memoize the component to prevent unnecessary re-renders
+const ProductSkeleton = memo(() => {
   return (
     <Card className="border-0 shadow-card overflow-hidden">
       <CardContent className="p-0">
@@ -18,6 +20,6 @@ const ProductSkeleton = () => {
       </CardContent>
     </Card>
   );
-};
+});
 
 export default ProductSkeleton;

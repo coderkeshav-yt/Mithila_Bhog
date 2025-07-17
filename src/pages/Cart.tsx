@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,10 +14,17 @@ const Cart = () => {
   const navigate = useNavigate();
   const { cartItems, updateQuantity, removeFromCart, getTotalPrice } = useCart();
 
-  const total = getTotalPrice();
+  // Memoize calculations to prevent unnecessary recalculations on re-renders
   const FREE_DELIVERY_THRESHOLD = 500;
-  const isEligibleForFreeDelivery = total >= FREE_DELIVERY_THRESHOLD;
-  const remainingForFreeDelivery = FREE_DELIVERY_THRESHOLD - total;
+  
+  const { total, isEligibleForFreeDelivery, remainingForFreeDelivery } = useMemo(() => {
+    const totalPrice = getTotalPrice();
+    return {
+      total: totalPrice,
+      isEligibleForFreeDelivery: totalPrice >= FREE_DELIVERY_THRESHOLD,
+      remainingForFreeDelivery: FREE_DELIVERY_THRESHOLD - totalPrice
+    };
+  }, [getTotalPrice, cartItems]);
 
   const handleQuantityChange = (id: string, newQuantity: number) => {
     if (newQuantity < 1) {
@@ -61,62 +68,66 @@ const Cart = () => {
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Left Column - Cart Items */}
           <div className="flex-1 space-y-4">
-            {cartItems.map((item) => (
-              <Card key={item.id} className="border-0 shadow-card">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={item.image_url || "/placeholder.svg"}
-                      alt={item.name}
-                      className="w-20 h-20 object-cover rounded-lg"
-                      onError={(e) => {
-                        e.currentTarget.src = "/placeholder.svg";
-                      }}
-                    />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
-                      <p className="text-muted-foreground text-sm mb-2">
-                        {item.category}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-lg text-primary">
-                          ₹{item.price}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <span className="font-medium min-w-[2ch] text-center">
-                            {item.quantity}
+            {useMemo(() => {
+              return cartItems.map((item) => (
+                <Card key={item.id} className="border-0 shadow-card">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={item.image_url || "/placeholder.svg"}
+                        alt={item.name}
+                        className="w-20 h-20 object-cover rounded-lg"
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder.svg";
+                        }}
+                      />
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
+                        <p className="text-muted-foreground text-sm mb-2">
+                          {item.category}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-lg text-primary">
+                            ₹{item.price}
                           </span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 ml-2"
-                            onClick={() => removeFromCart(item.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <span className="font-medium min-w-[2ch] text-center">
+                              {item.quantity}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 ml-2"
+                              onClick={() => removeFromCart(item.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ));
+            }, [cartItems, handleQuantityChange, removeFromCart])}
           </div>
 
           {/* Right Column - Order Summary and Delivery Banner */}
@@ -166,12 +177,14 @@ const Cart = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm">
-                      <span>{item.name} × {item.quantity}</span>
-                      <span>₹{(item.price * item.quantity).toFixed(2)}</span>
-                    </div>
-                  ))}
+                  {useMemo(() => {
+                    return cartItems.map((item) => (
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <span>{item.name} × {item.quantity}</span>
+                        <span>₹{(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ));
+                  }, [cartItems])}
                 </div>
                 
                 <Separator />
@@ -183,7 +196,7 @@ const Cart = () => {
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Shipping</span>
-                    <span>Calculated at checkout</span>
+                    <span>{isEligibleForFreeDelivery ? "Free" : "Calculated at checkout"}</span>
                   </div>
                 </div>
                 
